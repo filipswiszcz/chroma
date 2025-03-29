@@ -32,10 +32,32 @@ def test_dns_lookup(domain):
     
     return ip
 
+
+def fetch_page(ip):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.connect((ip, 80))
+
+    request = f"GET / HTTP/1.1\r\nHost: {ip}\r\nConnection: close\r\n\r\n"
+    sock.sendall(request.encode())
+
+    response = b""
+    while True:
+        chunk = sock.recv(4096)
+        if not chunk: break
+        response += chunk
+
+    sock.close()
+
+    headers, html = response.split(b"\r\n\r\n", 1)
+    
+    return html.decode("utf-8", errors="ignore")
+
+
 def run():
     try:
-        ip = test_dns_lookup("youtube.com")
-        print(f"domain=youtube.com, ip={ip}")
+        ip = test_dns_lookup("rossman.pl")
+        print(f"domain=rossman.pl, ip={ip}")
+        fetch_page("rossman.pl")
     except Exception as e:
         print(f"DNS lookup err: {e}")
 
