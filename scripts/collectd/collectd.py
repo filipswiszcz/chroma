@@ -1,3 +1,4 @@
+import os
 import sys
 import re
 import time
@@ -46,6 +47,16 @@ source = Source(
 
 # ?page=
 
+def __load_proxies():
+    cdir = os.path.dirname(__file__)
+    proxies = {}
+    with open(os.path.join(cdir, "resources/proxies.txt"), "r") as f:
+        for ln in f:
+            proxies["http"] = "http://" + ln
+            proxies["https"] = "http://" + ln
+    return proxies
+    
+
 agent = fu.UserAgent(os="Ubuntu")
 
 headers = {
@@ -53,7 +64,9 @@ headers = {
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": "https://www.google.com/"
 }
-response = requests.get(source.prod_url, headers=headers)
+proxies = __load_proxies()
+
+response = requests.get(source.prod_url, headers=headers, proxies=proxies)
 soup = bs4.BeautifulSoup(response.content, "html.parser")
 # product = re.search('<div class="RowProductTiles[^"]*".*?</div>', response.text)
 elems = soup.find_all(class_=re.compile("^RowProductTiles"))
@@ -63,7 +76,10 @@ for e in elems:
     for i in imgcs:
         urls.append(i.find("a").get("href"))
 
-# print(urls)
+print(urls[0])
+
+# todo
+# if result is None, then insert empty row with id
 
 
 def init_source(brand):
@@ -107,4 +123,5 @@ def get_urls():
     # everything is available
 
 if __name__ == "__main__":
-    init_source("rossmann")
+    # init_source("rossmann")
+    pass
