@@ -56,54 +56,27 @@ class Source:
 
 rand = Randomizer()
 
-
-# source = Source(
-#     "rossmann",
-#     "https://www.rossmann.pl",
-#     "https://www.rossmann.pl/kategoria/makijaz-i-paznokcie,12000",
-#     7487, # find those on website
-#     312
-# )
-
-# ?page=
-
-# headers = {
-#     "User-agent": rand.get_user_agent(),
-#     "Accept-Language": "en-US,en;q=0.9",
-#     "Referer": rand.get_referer()
-# }
-# proxies = rand.get_proxies()
-
-# response = requests.get(source.prod_url, headers=headers, proxies=proxies)
-# soup = bs4.BeautifulSoup(response.content, "html.parser")
-# elems = soup.find_all(class_=re.compile("^RowProductTiles"))
-# urls = []
-# for e in elems:
-#     imgcs = e.find_all(class_=re.compile("^ImageSection-module_imageSection"))
-#     for i in imgcs:
-#         urls.append(i.find("a").get("href"))
-
-# print(urls[0])
-
 # if result is None, then insert empty row with id
 
 URLS = q.Queue()
-PROC = True
+PRODUCTS = q.Queue()
+PROC = t.Event()
 
-def run_source(brand):
-    match brand:
-        case "rossmann":
-            details = __get_source_details("https://rossmann.pl/kategoria/makijaz-i-paznokcie,12000")
-            source = Source(
-                "rossmann", "https://rossmann.pl",
-                "https://rossmann.pl/kategoria/makijaz-i-paznokcie,12000",
-                int(details[0][:-10]), int(details[1])
-            )
-            th = t.Thread(target=__proc_que)
-            th.start()
-            __collect_urls(source)
-        case _:
-            pass
+def run_collector(brands):
+    procth = t.Thread(target=__proc_que)
+    procth.start()
+    for b in brands:
+        match b:
+            case "rossmann":
+                details = __get_source_details("https://rossmann.pl/kategoria/makijaz-i-paznokcie,12000")
+                source = Source(
+                    "rossmann", "https://rossmann.pl",
+                    "https://rossmann.pl/kategoria/makijaz-i-paznokcie,12000",
+                    int(details[0][:-10]), int(details[1])
+                )
+                __collect_urls(source)
+            case _:
+                pass
 
 
 def __get_source_details(url):
@@ -121,7 +94,7 @@ def __get_source_details(url):
 
 def __proc_que():
     cdir = os.path.dirname(__file__)
-    while PROC:
+    while not PROC.is_set():
         with open(os.path.join(cdir, "resources/urls.txt"), "a") as f:
             for i in range(URLS.qsize()): f.write(URLS.get() + "\n")
         sys.stdout.write(f"\r[COLLECTD] urls write")
@@ -137,21 +110,15 @@ def __collect_urls(source):
         elems = soup.find_all(class_=re.compile("^RowProductTiles"))
         for j in range(len(elems)):
             imgcs = elems[j].find_all(class_=re.compile("^ImageSection-module_imageSection"))
-            for img in imgcs: URLS.put(img.find("a").get("href"))
-            sys.stdout.write(f"\r[COLLECTD] {j}/{len(elems)} urls")
+            for img in imgcs: URLS.put(source.base_url + img.find("a").get("href"))
+            sys.stdout.write(f"\r[COLLECTD] read {j + 1}/{len(elems)} urls")
             sys.stdout.flush()
-        sys.stdout.write(f"\r[COLLECTD] {i}/{source.pages_k} pages")
+        sys.stdout.write(f"\r[COLLECTD] read {i + 1}/{source.pages_k} pages")
         sys.stdout.flush()
         time.sleep(randint(5, 10))
-    PROC = False
-
-# try:
-#     for i in range(100):
-#         sys.stdout.write(f"\rcollected: {i}/100")
-#         sys.stdout.flush()
-#         time.sleep(1)
-# except KeyboardInterrupt: pass
-
+    PROC.set()
+    sys.stdout.write(f"\r[COLLECTD] completed")
+    sys.stdout.flush()
 
 # coins system (rubins)
     # collect them from watching an ad or other activities
@@ -160,4 +127,7 @@ def __collect_urls(source):
     # everything is available
 
 if __name__ == "__main__":
-    run_source("rossmann")
+    try:
+        brands = ["rossmann", "hebe"]
+        run_collector(brands)
+    except KeyboardInterrupt: pass
