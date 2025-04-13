@@ -52,15 +52,15 @@ class Source:
         self.pages_k = pages_k
 
 
-# id | name | type | desc | ingredients
-
 rand = Randomizer()
 
 # if result is None, then insert empty row with id
 
 URLS = q.Queue()
 PRODUCTS = q.Queue()
-PROC = t.Event()
+URLS_PROC, PROD_PROC = t.Event(), t.Event()
+
+PROD_ID = 1
 
 def run_collector(brands):
     procth = t.Thread(target=__proc_que)
@@ -79,6 +79,16 @@ def run_collector(brands):
                 pass
 
 
+def __proc_que():
+    cdir = os.path.dirname(__file__)
+    while not URLS_PROC.is_set():
+        with open(os.path.join(cdir, "resources/urls.txt"), "a") as f:
+            for i in range(URLS.qsize()): f.write(URLS.get() + "\n")
+        sys.stdout.write(f"\r[COLLECTD] urls write")
+        sys.stdout.flush()
+        time.sleep(20)
+
+
 def __get_source_details(url):
     headers = {
         "User-agent": rand.get_user_agent(),
@@ -92,20 +102,10 @@ def __get_source_details(url):
     return products, pages
 
 
-def __proc_que():
-    cdir = os.path.dirname(__file__)
-    while not PROC.is_set():
-        with open(os.path.join(cdir, "resources/urls.txt"), "a") as f:
-            for i in range(URLS.qsize()): f.write(URLS.get() + "\n")
-        sys.stdout.write(f"\r[COLLECTD] urls write")
-        sys.stdout.flush()
-        time.sleep(20)
-
-
 def __collect_urls(source):
     from random import randint
     for i in range(source.pages_k):
-        res = requests.get(source.prod_url + "?page=" + str(i))
+        res = requests.get(source.prod_url + "?page=" + str(i), headers=headers, proxies=rand.get_proxies())
         soup = bs4.BeautifulSoup(res.content, "html.parser")
         elems = soup.find_all(class_=re.compile("^RowProductTiles"))
         for j in range(len(elems)):
@@ -116,9 +116,72 @@ def __collect_urls(source):
         sys.stdout.write(f"\r[COLLECTD] read {i + 1}/{source.pages_k} pages")
         sys.stdout.flush()
         time.sleep(randint(5, 10))
-    PROC.set()
+    while URLS.qsize() != 0: continue;
+    URLS_PROC.set()
     sys.stdout.write(f"\r[COLLECTD] completed")
     sys.stdout.flush()
+
+
+def run_processor():
+    from random import randint
+    cdir = os.path.dirname(__file__)
+    prod_k = __get_products_k()
+    k, d = prod_k // 10, prod_k % 10
+    for i in range(k + 1):
+        with open(os.path.join(cdir, "resources/urls.txt"), "r") as f:
+            for j, ln in enumerate(f):
+                if i == k and j >= i * 10:
+                    __collect_prod()
+                    time.sleep(randint(5, 10))
+                else:
+                    if j < i * 10 or j >= (i * 10) + 10: continue
+                    __collect_prod()
+                    time.sleep(randint(5, 10))
+        sys.stdout.write(f"\r[COLLECTD] proc {i + 1}/{k + 1} operations")
+        sys.stdout.flush()
+        time.sleep(1)
+    while PRODUCTS.qsize() != 0: continue
+    PROC_PROD.set()
+    sys.stdout.write(f"\r[COLLECTD] completed")
+    sys.stdout.flush()
+
+
+def _proc_prod_que():
+    cdir = os.path.dirname(__file__)
+    while not PROC_PROD.is_set():
+        with open(os.path.join(cdir, "resources/products.txt"), "a") as f:
+            for i in range(PRODUCTS.qsize()): f.write(PRODUCTS.get() + "\n")
+        sys.stdout.write(f"\r[COLLECTD] products write")
+        sys.stdout.flush()
+        time.sleep(10)
+
+
+def __get_products_k():
+    cdir = os.path.dirname(__file__)
+    with open(os.path.join(cdir, "resources/urls.txt"), "r") as f:
+        return sum(1 for _ in f)
+
+
+def __collect_prod(url):
+    headers = {
+        "User-agent": rand.get_user_agent(),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": rand.get_referer()
+    }
+    res = requests.get(url, headers=headers, proxies=rand.get_proxies())
+    soup = bs4.BeautifulSoup(res.content, "html.parser")
+    info = str(PROD_ID) + "; "
+    title = soup.find(class_=re.compile("^styles-module_titleBrand")).text + "; "
+    elems = soup.find_all(class_=re.compile("^styles-module_productDescriptionContent"))
+    ean, desc = "", ""
+    for i in range(len(elems)):
+        if i < 2: desc += elems[i].text + "\n" + "; "
+        else: ean += elems[i].text[(elems[i].text.find("EAN") + 3):] + "; "
+    cat = url.split("/")[4] + "; "
+    info += ean + title + cat + desc
+    PRODUCTS.put(info)
+    PROD_ID += 1
+
 
 # coins system (rubins)
     # collect them from watching an ad or other activities
@@ -127,7 +190,19 @@ def __collect_urls(source):
     # everything is available
 
 if __name__ == "__main__":
-    try:
-        brands = ["rossmann", "hebe"]
-        run_collector(brands)
-    except KeyboardInterrupt: pass
+    match len(sys.argv):
+        case 1:
+            try:
+                run_processor()
+            except KeyboardInterrupt: pass
+        case 2:
+            if sys.argv[1] != "--collect-urls":
+                print(f"script: usage: python3 collectd.py [--collect-urls]")
+            else:
+                try:
+                    brands = ["rossmann", "hebe"]
+                    # run_collector(brands)
+                    # run proc
+                except KeyboardInterrupt: pass
+        case _:
+            print(f"script: usage: python3 collectd.py [--collect-urls]")
