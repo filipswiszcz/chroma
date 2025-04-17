@@ -1,4 +1,4 @@
-from chroma.request.agent import UserAgent
+from request import UserAgent
 
 if __name__ == "__main__":
     ag = UserAgent()
