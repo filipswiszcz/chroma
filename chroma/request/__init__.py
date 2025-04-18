@@ -1,1 +1,1 @@
-from .agent import UserAgent
+from .header import UserAgent, Proxy

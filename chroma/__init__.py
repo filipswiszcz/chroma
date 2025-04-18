@@ -1,1 +1,1 @@
-from .request import UserAgent
+from .request import UserAgent, Proxy
