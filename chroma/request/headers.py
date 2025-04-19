@@ -1,7 +1,8 @@
 from enum import Enum
 from random import choice, choices, randint
+from typing import Iterator
 
-# ********** Exception **********
+# *************** Exception ***************
 
 class UserAgentException(Exception):
     """Raised when there is a problem with UserAgent"""
@@ -9,10 +10,16 @@ class UserAgentException(Exception):
 class ProxyException(Exception):
     """Raised when there is a problem with Proxy"""
 
-# ********** Agent **********
+# *************** Randomizer***************
+
+class Randomizer():
+    def __init(self, multithreading=False) -> None:
+        pass
+
+# *************** Agent ***************
 
 class _Device:
-    WIN10_x64 = "Windows NT 10.0";  WIN10_x32 = "Windows NT 10.0"; LINUX_x64 = "X11"; LINUX_x32 = "X11"; MAC = "Macintosh";
+    WIN10_x64 = "Windows NT 10.0"; WIN10_x32 = "Windows NT 10.0"; LINUX_x64 = "X11"; LINUX_x32 = "X11"; MAC = "Macintosh";
 
 class UserAgent():
     def __init__(self) -> None:
@@ -28,12 +35,12 @@ class UserAgent():
             "Firefox": {"platforms": [_Device.WIN10_x64, _Device.LINUX_x64, _Device.LINUX_x32, _Device.MAC], "suffixes": {_Device.WIN10_x64: "Win64; x64; rv:137.0", _Device.LINUX_x64: "Linux x86_64; rv:137.0", _Device.LINUX_x32: "Linux i686; rv:137.0", _Device.MAC: "Intel Mac OS X 14.7; rv:137.0"}, "engine": "Gecko", "version": "Gecko/20100101 Firefox/137.0"}
         }
     def get(self) -> str:
-        browser = self._browsers[choices(list(self._browsers.keys()), weights=[0.1, 0.2, 0.5, 0.2], k=1)[0]]
+        browser = self._browsers[choices(list(self._browsers.keys()), weights=[0.05, 0.2, 0.6, 0.15], k=1)[0]]
         platform = choice(browser["platforms"])
         parts = ["Mozilla/5.0", f"({platform}" + ")" if browser["suffixes"][platform] == "" else f"({platform}; {browser["suffixes"][platform]})", self._engines[browser["engine"]]["token"], browser["version"]]
         return " ".join(parts)
 
-# ********** Proxy **********
+# *************** Proxy ***************
 
 class _AddressState(Enum):
     INACTIVE = 0; IDLE = 1; ACTIVE = 2;
@@ -52,6 +59,17 @@ class Proxy:
             for line in file:
                 parts = line.split(" ")
                 self.addresses.append(_Address(parts[0], parts[1].upper()))
+    def _check_address_state(self) -> bool:
+        pass
     def _get_available_addresses(self) -> Iterator[str]:
         for address in self.addresses:
             if address.state == _AddressState.IDLE: yield address.label
+
+# *************** Referer ***************
+
+class Referer:
+    def __init__(self) -> None:
+        self._hosts = ["https://google.com", "https://youtube.com", "https://yahoo.com", "https://bing.com"]
+    def __collect_random_urls(self) -> None: pass
+    def get_url(self) -> str:
+        return choice(self._hosts)
