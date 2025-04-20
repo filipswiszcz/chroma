@@ -1,5 +1,7 @@
 from enum import Enum
 from random import choice, choices, randint
+from queue import Queue
+from threading import Thread # other class should handle this
 from typing import Iterator
 
 # *************** Exception ***************
@@ -10,11 +12,19 @@ class UserAgentException(Exception):
 class ProxyException(Exception):
     """Raised when there is a problem with Proxy"""
 
-# *************** Randomizer***************
+# *************** Randomizer ***************
 
 class Randomizer():
-    def __init(self, multithreading=False) -> None:
-        pass
+    def __init(self) -> None:
+        self.user_agents, self.proxies, self.referers = Queue(), Queue(), Queue()
+    def run() -> None:
+        Thread(target=__write_user_agents).start()
+    def __write_user_agents(self) -> None:
+        user_agent = UserAgent()
+        while True:
+            if len(self.user_agents) < 10: self.user_agents.put(user_agent.get())
+    def get_header(self) -> str: # use contextvar
+        return {"UserAgent": self.user_agents.get(), "Accept-Language": "en-US,en;q=0.9", "Referer": self.referers.get()}
 
 # *************** Agent ***************
 
@@ -61,6 +71,8 @@ class Proxy:
                 self.addresses.append(_Address(parts[0], parts[1].upper()))
     def _check_address_state(self) -> bool:
         pass
+    def _add_address(self, address) -> None:
+        pass # add address live. everything should be live all the time
     def _get_available_addresses(self) -> Iterator[str]:
         for address in self.addresses:
             if address.state == _AddressState.IDLE: yield address.label
