@@ -40,7 +40,7 @@ class ContextVar:
     def __lt__(self, other) -> bool:
         return self.value < other
 
-DEBUG = ContextVar("DEBUG", 0)
+DEBUG, WORKERS = ContextVar("DEBUG", 0), ContextVar("WORKERS", 5)
 HEADERS = ContextVar("HEADERS", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36")
 
 # *************** Cache ***************
