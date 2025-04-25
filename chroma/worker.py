@@ -1,5 +1,5 @@
-from queue import Queue
-from threading import Thread , Lock as TLock
+from queue import Queue, Empty
+from threading import Thread, Lock as TLock, Event
 from multiprocessing import Lock as PLock
 from ctypes import c_int
 from typing import Union, ClassVar
@@ -14,9 +14,20 @@ class DispatcherException(Exception):
 
 class Dispatcher:
     def __init__(self) -> None:
-        self._workers, self.tasks = [], Queue()
+        self._workers, self.ops, self.shutdown = [], Queue(), Event()
         for _ in range(WORKERS):
             self._workers.append(_Worker(daemon=True))
+    def start(self) -> None:
+        for worker in self._workers: worker.start()
+        while not self.shutdown.is_set():
+            try:
+                op = self.ops.get(timeout=0.1)
+                # find worker, send op
+            except Empty: continue
+    def submit(self, op) -> None:
+        if self.shutdown:
+            raise RuntimeError("Dispatcher is offline")
+        self.tasks.put(op) # operation (type, data)
 
 # *************** Atomic ***************
 
@@ -45,3 +56,4 @@ class _Worker(Thread):
     WORKER_ID: ClassVar[AtomicInteger] = AtomicInteger()
     def __init__(self) -> None:
         super().__init__(name=f"Worker-{_Worker.WORKER_ID.get_and_increment()}", daemon=True)
+        self.is_busy = Event()
