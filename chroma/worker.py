@@ -22,8 +22,12 @@ class Dispatcher:
         while not self.shutdown.is_set():
             try:
                 op = self.ops.get(timeout=0.1)
+                worker = self.__find_worker()
                 # find worker, send op
             except Empty: continue
+    def __find_worker(self) -> _Worker:
+        for worker in self._workers:
+            if not worker.is_busy(): return worker
     def submit(self, op) -> None:
         if self.shutdown:
             raise RuntimeError("Dispatcher is offline")
