@@ -1,8 +1,11 @@
 from enum import Enum
 from random import choice, choices, randint
 from queue import Queue
-from threading import Thread # other class should handle this
+from time import sleep
+from threading import Event, Lock
 from typing import Iterator
+from helpers import Context, DEBUG
+from worker import _Worker
 
 # *************** Exception ***************
 
@@ -15,16 +18,22 @@ class ProxyException(Exception):
 # *************** Randomizer ***************
 
 class Randomizer():
-    def __init(self) -> None:
-        self.user_agents, self.proxies, self.referers = Queue(), Queue(), Queue()
-    def run() -> None:
-        Thread(target=__write_user_agents).start()
-    def __write_user_agents(self) -> None:
-        user_agent = UserAgent()
-        while True:
-            if len(self.user_agents) < 10: self.user_agents.put(user_agent.get())
-    def get_header(self) -> str: # use contextvar
-        return {"UserAgent": self.user_agents.get(), "Accept-Language": "en-US,en;q=0.9", "Referer": self.referers.get()}
+    def __init__(self) -> None:
+        self.proxies, self.user_agent, self.referrers, self.shutdown = Queue(), UserAgent(), ["https://google.com/", "https://bing.com/", "https://l.facebook.com/", "https://www.reddit.com/", "https://old.reddit.com/", "https://youtube.com/"], Event()
+    def start(self) -> None: _Worker(target=self.__get_idle_proxies).start()
+    def stop(self) -> None: self.shutdown.set()
+    def __get_idle_proxies(self) -> None:
+        proxy = Proxy()
+        proxy._check_address_state()
+        while not self.shutdown.is_set(): # it will be better in future
+            for address in proxy._get_available_addresses():
+                if address not in list(self.proxies.queue): self.proxies.put(address)
+            sleep(3)
+    def get_proxies(self) -> dict:
+        address = self.proxies.get(); address.state = _AddressState.ACTIVE
+        return {"http": "http://" + address.label, "https": "https://" + address.label}
+    def get_headers(self) -> str:
+        return " ".join(f"{k}: {v}" for k, v in {"UserAgent": self.user_agent.get(), "Accept-Language": "en-US,en;q=0.9", "Referer": choice(self.referrers)}.items())
 
 # *************** Agent ***************
 
@@ -66,22 +75,12 @@ class Proxy:
         self.__load_items("resources/proxies.txt")
     def __load_items(self, filepath) -> None:
         with open(filepath, "r") as file:
-            for line in file:
-                parts = line.split(" ")
-                self.addresses.append(_Address(parts[0], parts[1].upper()))
+            for line in file: self.addresses.append(_Address(line, _AddressState.INACTIVE))
     def _check_address_state(self) -> bool:
-        pass
+        # temporary check
+        for address in self.addresses: address.state = _AddressState.IDLE
     def _add_address(self, address) -> None:
         pass # add address live. everything should be live all the time
-    def _get_available_addresses(self) -> Iterator[str]:
+    def _get_available_addresses(self) -> Iterator[_Address]:
         for address in self.addresses:
-            if address.state == _AddressState.IDLE: yield address.label
-
-# *************** Referer ***************
-
-class Referer:
-    def __init__(self) -> None:
-        self._hosts = ["https://google.com", "https://youtube.com", "https://yahoo.com", "https://bing.com"]
-    def __collect_random_urls(self) -> None: pass
-    def get_url(self) -> str:
-        return choice(self._hosts)
+            if address.state == _AddressState.IDLE: yield address
