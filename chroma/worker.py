@@ -1,3 +1,4 @@
+from __future__ import annotations
 from queue import Queue, Empty
 from threading import Thread, Lock as TLock, Event
 from multiprocessing import Lock as PLock
@@ -15,8 +16,8 @@ class DispatcherException(Exception):
 class Dispatcher:
     def __init__(self) -> None:
         self._workers, self.ops, self.shutdown = [], Queue(), Event()
-        for _ in range(WORKERS):
-            self._workers.append(_Worker(daemon=True))
+        for _ in range(WORKERS.value):
+            self._workers.append(_Worker())
     def start(self) -> None:
         for worker in self._workers: worker.start()
         while not self.shutdown.is_set():
@@ -32,7 +33,7 @@ class Dispatcher:
         if self.shutdown:
             raise RuntimeError("Dispatcher is offline")
         self.tasks.put(op) # operation (type, data)
-
+        
 # *************** Atomic ***************
 
 LockType = Union[TLock, PLock]
@@ -58,6 +59,6 @@ class AtomicInteger:
 
 class _Worker(Thread):
     WORKER_ID: ClassVar[AtomicInteger] = AtomicInteger()
-    def __init__(self) -> None:
-        super().__init__(name=f"Worker-{_Worker.WORKER_ID.get_and_increment()}", daemon=True)
+    def __init__(self, target=None) -> None:
+        super().__init__(name=f"Worker-{_Worker.WORKER_ID.get_and_increment()}", target=target, daemon=True)
         self.is_busy = Event()
