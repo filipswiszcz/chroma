@@ -5,6 +5,6 @@ setup(
     name="chroma",
     version="0.0.1",
     packages=["chroma", "chroma.request"],
-    install_requires=[],
+    install_requires=["mysql-connector-python"],
     python_requires=">=3.10"
 )
