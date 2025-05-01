@@ -1,19 +1,27 @@
 from __future__ import annotations
-import os, functools, contextlib, time, datetime, traceback
+import os, functools, contextlib, time, traceback
 from typing import Any, ClassVar, Dict
 from collections import defaultdict, deque
+from datetime import datetime
+from psutil import cpu_percent, virtual_memory, disk_usage # temporary lib
+from threading import Thread, Event
 
 
 @functools.cache
 def getenv(key, default=0): return type(default) (os.getenv(key, default))
 
+def interval(seconds): time.sleep(seconds)
+
 # *************** Watchdog ***************
 
 class Watchdog:
-    def __init__(self) -> None:
-        self._metrics = defaultdict(lambda: deque(maxlen=256))
-        self._errors = deque(maxlen=256)
-        self.alert = None
+    def __init__(self, callback=None) -> None:
+        self._func_metrics, self._errors, self._sys_metrics, self.callback, self.shutdown = defaultdict(lambda: deque(maxlen=256)), deque(maxlen=256), deque(maxlen=16), callback, Event()
+    def start(self) -> None: Thread(target=self.__read_sys_metrics, daemon=True).start()
+    def stop(self) -> None: self.shutdown.set()
+    def __read_sys_metrics(self) -> None:
+        while not self.shutdown.is_set():
+            self._sys_metrics.append({"timestamp": datetime.now(), "cpu": cpu_percent(), "mem": virtual_memory().percent, "disk": disk_usage("/").percent}), interval(SYS_INFO_INTERVAL.value)
     def monitor(self, function) -> "func":
         def wrapped(*args, **kwargs) -> "func":
             start = time.time()
@@ -28,11 +36,12 @@ class Watchdog:
     def _record_metric(self, name: str, value: int, state: str) -> None:
         timestamp = datetime.datetime.now()
         self._metrics[name].append({"timestamp": timestamp, "value": value, "state": state})
-        if value > 5 and self.alert: self.alert(f"Performance drop: {name} took {value:.2f}s", "performance")
+        if value > 5 and self.callback: self.callback(f"Performance drop: {name} took {value:.2f}s", "performance")
     def _record_error(self, context: str, error: Any) -> None:
         error_data = {"context": context, "type": type(error).__name__, "message": str(error), "stack_trace": traceback.format_exc(), "timestamp": datetime.datetime.now()}
         self._errors.append(error_data)
-        if self.alert: self.alert(f"Error in {context}: {str(error)}", "error", error_data)
+        if self.callback: self.callback(f"Error in {context}: {str(error)}", "error", error_data)
+    def get_sys_metrics(self) -> list: return list(self._sys_metrics)
 
 # structure
 #   exec time
@@ -71,6 +80,8 @@ class ContextVar:
     def __le__(self, other) -> bool: return self.value <= other
     def __lt__(self, other) -> bool: return self.value < other
 
-DEBUG, INSTANCES, WORKERS = ContextVar("DEBUG", 0), ContextVar("INSTANCES", 1), ContextVar("WORKERS", 5)
+DEBUG, CAPTURING = ContextVar("DEBUG", 0), ContextVar("CAPTURING", 1)
+INSTANCES, WORKERS = ContextVar("INSTANCES", 1), ContextVar("WORKERS", 5)
+SYS_INFO_INTERVAL = ContextVar("SYS_INFO_INTERVAL", 1)
 
 # *************** Cache ***************
