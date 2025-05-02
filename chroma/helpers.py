@@ -30,18 +30,24 @@ class Watchdog:
                 duration = time.time() - start
                 self._record_metric(function.__name__, duration, "success")
                 return result
-            except Exception:
+            except Exception as exc:
                 duration = time.time() - start
+                self._record_metric(function.__name__, duration, "error")
+                self._record_error(function.__name__, exc)
+                raise
         return wrapped
     def _record_metric(self, name: str, value: int, state: str) -> None:
-        timestamp = datetime.datetime.now()
-        self._metrics[name].append({"timestamp": timestamp, "value": value, "state": state})
+        timestamp = datetime.now()
+        self._func_metrics[name].append({"timestamp": timestamp, "value": value, "state": state})
         if value > 5 and self.callback: self.callback(f"Performance drop: {name} took {value:.2f}s", "performance")
     def _record_error(self, context: str, error: Any) -> None:
-        error_data = {"context": context, "type": type(error).__name__, "message": str(error), "stack_trace": traceback.format_exc(), "timestamp": datetime.datetime.now()}
+        error_data = {"context": context, "type": type(error).__name__, "message": str(error), "stack_trace": traceback.format_exc(), "timestamp": datetime.now()}
         self._errors.append(error_data)
-        if self.callback: self.callback(f"Error in {context}: {str(error)}", "error", error_data)
+        if self.callback: self.callback(f"Error in {context}: {str(error)}", "error")
     def get_sys_metrics(self) -> list: return list(self._sys_metrics)
+    def get_func_metrics(self, name=None) -> list:
+        if name: return list(self._func_metrics.get(name, []))
+        return {k: list(v) for k, v in self._func_metrics.items()}
 
 # structure
 #   exec time
