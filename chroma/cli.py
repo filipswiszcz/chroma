@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Dict, List, Callable
 from helpers import DEBUG
+from instance import Operator
+from worker import _Worker
 
 # *************** Command ***************
 
@@ -9,13 +11,7 @@ class Command(ABC):
     @abstractmethod
     def execute(self, args: List[str]) -> None: pass
 
-class _HelpCommand(Command):
-    def __init__(self, command: Callable = None) -> None:
-        self.command = command
-    def execute(self, args: List[str]) -> None:
-        self.command(args)
-
-class _ExitCommand(Command):
+class _GenericCommand(Command):
     def __init__(self, command: Callable = None) -> None:
         self.command = command
     def execute(self, args: List[str]) -> None:
@@ -26,11 +22,14 @@ class _ExitCommand(Command):
 class CLI:
     def __init__(self) -> None:
         self._commands: Dict[str, Command] = {}
+        self._operator = Operator()
         self.__builtin_commands()
         self.shutdown = False
     def __builtin_commands(self) -> None:
-        self._commands["help"], self._commands["exit"] = _HelpCommand(self.__help_command), _ExitCommand(self.__exit_command)
+        self._commands["help"], self._commands["exit"] = _GenericCommand(self.__help_command), _GenericCommand(self.__exit_command)
+        self._commands["instances"], self._commands["instance"] = _GenericCommand(self._operator._list_command), _GenericCommand(self._operator._manage_command)
     def start(self) -> None:
+        self._operator.start()
         while not self.shutdown:
             try:
                 text = input("> ")

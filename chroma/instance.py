@@ -1,8 +1,8 @@
 from enum import Enum, auto
 from multiprocessing import Process, cpu_count
 from typing import ClassVar, List
-from worker import AtomicInteger, Dispatcher, _Worker
 from helpers import DEBUG
+from worker import AtomicInteger, Dispatcher, _Worker
 
 # *************** Exception ***************
 
@@ -22,11 +22,11 @@ class Operator: # operates instances
     def __init__(self) -> None:
         self._instances = []
     def start(self) -> None:
-        instance = _Instance()
-        # instance.start()
-        self._instances.append(instance)
-    def __instances_command(self, args: List[str]) -> None:
-        print("Instances: [" + ", ".join(f"*{instance}" if instance.is_alive() else f"{instance}" for instances in self._instances) + "]")
+        instance = _Instance(); instance.start(); self._instances.append(instance)
+    def _list_command(self, args: List[str]) -> "Command":
+        print("Instances: [" + ", ".join(f"*{instance}" if instance.is_alive() else f"{instance}" for instance in self._instances) + "]")
+    def _manage_command(self, args: List[str]) -> "Command":
+        if len(args) == 0: print("Usage: instance [enable/disable] name") # operate instance with subcommands
 
 # *************** Instance ***************
 
