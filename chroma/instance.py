@@ -1,7 +1,8 @@
 from enum import Enum, auto
 from multiprocessing import Process, cpu_count
-from typing import ClassVar
-from worker import AtomicInteger, Dispatcher
+from typing import ClassVar, List
+from worker import AtomicInteger, Dispatcher, _Worker
+from helpers import DEBUG
 
 # *************** Exception ***************
 
@@ -15,6 +16,18 @@ class Ops(Enum):
     FETCH_PROD_URLS = auto(); FETCH_PROD_DATA = auto();
     PROCESS_PROD_DATA = auto(); SAVE_PROD_DATA = auto(); # saving in other thread???
 
+# *************** Operator ***************
+
+class Operator: # operates instances
+    def __init__(self) -> None:
+        self._instances = []
+    def start(self) -> None:
+        instance = _Instance()
+        # instance.start()
+        self._instances.append(instance)
+    def __instances_command(self, args: List[str]) -> None:
+        print("Instances: [" + ", ".join(f"*{instance}" if instance.is_alive() else f"{instance}" for instances in self._instances) + "]")
+
 # *************** Instance ***************
 
 class _Instance(Process):
@@ -22,6 +35,12 @@ class _Instance(Process):
     def __init__(self) -> None:
         super().__init__(name=f"Instance-{_Instance.INSTANCE_ID.get_and_increment()}", daemon=True)
         self._dispatcher = Dispatcher()
+    def start(self) -> None: self._dispatcher.start()
+    def stop(self) -> None:
+        self._dispatcher.stop()
+        if DEBUG > 0: print(f"Shutting {self.name}..")
+    def is_alive(self) -> bool: return True # change later
+    def __str__(self) -> str: return self.name
 
 # instance with prod/page data fetch
 # instance with prod analyze
