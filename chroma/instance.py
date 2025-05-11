@@ -26,7 +26,15 @@ class Operator: # operates instances
     def _list_command(self, args: List[str]) -> "Command":
         print("Instances: [" + ", ".join(f"*{instance}" if instance.is_alive() else f"{instance}" for instance in self._instances) + "]")
     def _manage_command(self, args: List[str]) -> "Command":
-        if len(args) == 0: print("Usage: instance [enable/disable] name") # operate instance with subcommands
+        if len(args) < 2: print("Usage: instance [run/stop/modify] name") # operate instance with subcommands
+        match args[0].lower():
+            case "run":
+                instance = next((instance for instance in self._instances if str(instance).lower() == args[1].lower()), None)
+                if instance is None: print("Unknown name. Type 'instances' for available instances")
+                instance.start()
+            case "stop": pass
+            case "modify": pass
+            case _: print("Usage: instance [run/stop/modify] name")
 
 # *************** Instance ***************
 
@@ -37,7 +45,7 @@ class _Instance(Process):
         self._dispatcher = Dispatcher()
     def start(self) -> None: self._dispatcher.start()
     def stop(self) -> None:
-        self._dispatcher.stop()
+        self._dispatcher.stop() # join threads
         if DEBUG > 0: print(f"Shutting {self.name}..")
     def is_alive(self) -> bool: return True # change later
     def __str__(self) -> str: return self.name
