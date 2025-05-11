@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from multiprocessing import Process, cpu_count
+from multiprocessing import Process, Event, cpu_count
 from typing import ClassVar, List
 from helpers import DEBUG
 from worker import AtomicInteger, Dispatcher, _Worker
@@ -26,13 +26,18 @@ class Operator: # operates instances
     def _list_command(self, args: List[str]) -> "Command":
         print("Instances: [" + ", ".join(f"*{instance}" if instance.is_alive() else f"{instance}" for instance in self._instances) + "]")
     def _manage_command(self, args: List[str]) -> "Command":
-        if len(args) < 2: print("Usage: instance [run/stop/modify] name") # operate instance with subcommands
+        if len(args) < 2: print("Usage: instance [run/stop/modify] name"); return # operate instance with subcommands
         match args[0].lower():
             case "run":
                 instance = next((instance for instance in self._instances if str(instance).lower() == args[1].lower()), None)
                 if instance is None: print("Unknown name. Type 'instances' for available instances")
-                instance.start()
-            case "stop": pass
+                elif instance.is_alive(): print("Instance is already running")
+                else: instance.start()
+            case "stop":
+                instance = next((instance for instance in self._instances if str(instance).lower() == args[1].lower()), None)
+                if instance is None: print("Unknown name. Type 'instances' for available instances")
+                elif not instance.is_alive(): print("Instance is offline")
+                else: instance.stop()
             case "modify": pass
             case _: print("Usage: instance [run/stop/modify] name")
 
@@ -42,12 +47,12 @@ class _Instance(Process):
     INSTANCE_ID: ClassVar[AtomicInteger] = AtomicInteger()
     def __init__(self) -> None:
         super().__init__(name=f"Instance-{_Instance.INSTANCE_ID.get_and_increment()}", daemon=True)
-        self._dispatcher = Dispatcher()
-    def start(self) -> None: self._dispatcher.start()
+        self._dispatcher, self._running = Dispatcher(), Event()
+    def start(self) -> None: self._running.set(); self._dispatcher.start()
     def stop(self) -> None:
-        self._dispatcher.stop() # join threads
+        self._running.clear(); self._dispatcher.stop()
         if DEBUG > 0: print(f"Shutting {self.name}..")
-    def is_alive(self) -> bool: return True # change later
+    def is_alive(self) -> bool: return self._running.is_set()
     def __str__(self) -> str: return self.name
 
 # instance with prod/page data fetch
