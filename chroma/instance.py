@@ -12,9 +12,7 @@ class InstanceException(Exception):
 # *************** Ops ***************
 
 class Ops(Enum):
-    FETCH_PAGE_COUNT = auto(); FETCH_PROD_COUNT = auto();
-    FETCH_PROD_URLS = auto(); FETCH_PROD_DATA = auto();
-    PROCESS_PROD_DATA = auto(); SAVE_PROD_DATA = auto(); # saving in other thread???
+    FETCH = auto(); OBSERVE = auto(); PROCESS = auto();
 
 # *************** Operator ***************
 
@@ -42,16 +40,19 @@ class Operator: # operates instances
                 instance = next((instance for instance in self._instances if str(instance).lower() == args[1].lower()), None)
                 if instance is None: print("Unknown name. Type 'instances' for available instances")
                 else: print(f"ID: {instance}\nPriority: {instance.get_priority()}\nClearance: {instance.get_clearance()}\nStatus: {"running" if instance.is_alive() else "offline"}\nClassification: {instance.get_classification()}")
-            case "modify": pass
+            case "modify":
+                instance = next((instance for instance in self._instances if str(instance).lower() == args[1].lower()), None)
+                if instance is None: print("Unknown name. Type 'instances' for available instances")
+                elif instance.is_alive(): print("Instance needs to be offline")
             case _: print("Usage: instance [run/stop/info/modify] name")
 
 # *************** Instance ***************
 
 class _Instance(Process):
     INSTANCE_ID: ClassVar[AtomicInteger] = AtomicInteger()
-    def __init__(self) -> None:
+    def __init__(self, priority: int = 1, ) -> None:
         super().__init__(name=f"Instance-{_Instance.INSTANCE_ID.get_and_increment()}", daemon=True)
-        self.__priority, self.__clearance, self.__classification = 1, "A", "ROOT"
+        self.__priority, self.__clearance, self.__classification = priority, "PUBLIC", Ops.FETCH
         self._dispatcher, self._running = Dispatcher(), Event()
     def start(self) -> None: self._running.set(); self._dispatcher.start()
     def stop(self) -> None:
@@ -63,9 +64,11 @@ class _Instance(Process):
     def is_alive(self) -> bool: return self._running.is_set()
     def __str__(self) -> str: return self.name
 
-# instance with prod/page data fetch
-# instance with prod analyze
-# instance with api server
+# instance with data fetch
+    # targets are empty = idle, targets = (URLS, TEXT, IMAGES)
+# instance with response process
+    # 
+# tuned instance with api server
 
 # data
 # id-{first letter of type (uppercase)}
