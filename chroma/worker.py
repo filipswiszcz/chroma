@@ -15,14 +15,15 @@ class DispatcherException(Exception):
 
 class Dispatcher:
     def __init__(self) -> None:
-        self._workers, self.ops, self.shutdown = [], Queue(), Event()
+        self._workers, self.ops, self._running = [], Queue(), Event()
         for _ in range(WORKERS.value):
             self._workers.append(_Worker())
     def start(self) -> None:
+        self._running.set()
         for worker in self._workers: worker.start()
         _Worker(target=self.__runnable).start()
     def __runnable(self) -> None:
-        while not self.shutdown.is_set():
+        while self._running.is_set():
             try:
                 op = self.ops.get(timeout=0.1)
                 worker = self.__find_worker()
@@ -30,12 +31,12 @@ class Dispatcher:
             except Empty: continue
     def stop(self) -> None:
         for worker in self._workers: worker.join()
-        self.shutdown.set()
+        self._running.clear()
     def __find_worker(self) -> _Worker:
         for worker in self._workers:
             if not worker.is_busy(): return worker
     def submit(self, op) -> None:
-        if self.shutdown.is_set():
+        if not self._running.is_set():
             raise RuntimeError("Dispatcher is offline")
         self.tasks.put(op) # operation (type, data)
         
@@ -66,4 +67,4 @@ class _Worker(Thread):
     WORKER_ID: ClassVar[AtomicInteger] = AtomicInteger()
     def __init__(self, target=None) -> None:
         super().__init__(name=f"Worker-{_Worker.WORKER_ID.get_and_increment()}", target=target, daemon=True)
-        self.is_busy = Event()
+        self._busy = Event()
