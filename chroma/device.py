@@ -1,6 +1,8 @@
-from helpers import Context, ContextVar, DEBUG
 from request.headers import Randomizer, _AddressState
-from instance import _Instance
+from request.request import _Connection
+from cli import CLI
+from helpers import CAPTURING, Watchdog, interval
+from instance import Operator, _Instance
 from worker import AtomicInteger, _Worker
 
 # device == root
@@ -11,21 +13,28 @@ from worker import AtomicInteger, _Worker
 # works for one db
 # proxy state check on init and randomly
 
+def alert(message, prefix):
+    print(f"[{prefix.upper()}]: {message}")
+
+watchdog = Watchdog(callback=alert)
+watchdog.start()
+
+@watchdog.monitor
+def ping(data):
+    print("OK")
+
 if __name__ == "__main__":
+
+    # zz does nothing when used like this >> zz filename
+    # without any flags
 
     RANDOMIZER = Randomizer()
     RANDOMIZER.start()
     print(RANDOMIZER.get_headers())
-    proxy = RANDOMIZER.get_proxies()
-    print(proxy[1].state.name)
-    proxy[1].state = _AddressState.IDLE
-    print(RANDOMIZER.get_proxies()[1].state.name)
-    # print(RANDOMIZER.get_proxies()[1])
 
-    at = AtomicInteger()
-    print(at.get_and_increment())
-    print(at.get_and_increment())
-    print(at.get_and_increment())
+    with _Connection("example.com", 80, 5) as conn:
+        response = conn.send("/")
+        print(response.decode()[:100])
 
-    # inst = _Instance()
-    # inst._print()
+    cli = CLI()
+    cli.start()
