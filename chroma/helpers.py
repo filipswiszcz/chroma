@@ -88,6 +88,7 @@ class ContextVar:
 
 DEBUG, CAPTURING = ContextVar("DEBUG", 0), ContextVar("CAPTURING", 1)
 INSTANCES, WORKERS = ContextVar("INSTANCES", 1), ContextVar("WORKERS", 5)
+HTTP_TIMEOUT, HTTP_RETRIES, HTTP_REDIRECTS = ContextVar("HTTP_TIMEOUT", 5), ContextVar("HTTP_RETRIES", 1), ContextVar("HTTP_REDIRECTS", 3)
 SYS_INFO_INTERVAL = ContextVar("SYS_INFO_INTERVAL", 1)
 
 # *************** Cache ***************
