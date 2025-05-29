@@ -1,10 +1,10 @@
 from __future__ import annotations
 import os, functools, contextlib, time, traceback
-from typing import Any, ClassVar, Dict
-from collections import defaultdict, deque
+from typing import Any, ClassVar, TypeVar, Dict, Generic, MutableMapping, OrderedDict, Callable
+from collections import defaultdict, deque, OrderedDict
 from datetime import datetime
 from psutil import cpu_percent, virtual_memory, disk_usage # temporary lib
-from threading import Thread, Event
+from threading import Thread, Event, RLock
 
 
 @functools.cache
@@ -88,7 +88,52 @@ class ContextVar:
 
 DEBUG, CAPTURING = ContextVar("DEBUG", 0), ContextVar("CAPTURING", 1)
 INSTANCES, WORKERS = ContextVar("INSTANCES", 1), ContextVar("WORKERS", 5)
-HTTP_TIMEOUT, HTTP_RETRIES, HTTP_REDIRECTS = ContextVar("HTTP_TIMEOUT", 5), ContextVar("HTTP_RETRIES", 1), ContextVar("HTTP_REDIRECTS", 3)
+HTTP_TIMEOUT, HTTP_RETRIES, HTTP_REDIRECTS = ContextVar("HTTP_TIMEOUT", 5), ContextVar("HTTP_RETRIES", 1), ContextVar("HTTP_REDIRECTS", 10)
 SYS_INFO_INTERVAL = ContextVar("SYS_INFO_INTERVAL", 1)
 
 # *************** Cache ***************
+
+_KeyType = TypeVar("_KeyType")
+_ValueType = TypeVar("_ValueType")
+_DefaultType = TypeVar("_DefaultType")
+
+class RecentlyUsedDict(Generic[_KeyType, _ValueType], MutableMapping[_KeyType, _ValueType]):
+    _dict: OrderedDict[_KeyType, _ValueType]
+    _maxsize: int
+    lock: RLock
+    def __init__(self, maxsize: int = 10, disposer: Callable[[_ValueType], None] | None = None) -> None:
+        super().__init__()
+        self._maxsize, self.disposer, self._dict, self.lock = maxsize, disposer, OrderedDict(), RLock()
+    def __getitem__(self, key: _KeyType) -> _ValueType:
+        with self.lock:
+            item = self._dict.pop(key)
+            self._dict[key] = item
+            return item
+    def __setitem__(self, key: _KeyType, value: _ValueType) -> None:
+        evicted_item = None
+        with self.lock:
+            try:
+                evicted_item = key, self._dict.pop(key)
+                self._dict[key] = value
+            except KeyError:
+                self._dict[key] = value
+                if len(self._dict) > self._maxsize: evicted_item = self._dict.popitem(last=False)
+        if evicted_item is not None and self.disposer:
+            _, evicted_value = evicted_item
+            self.disposer(evicted_value)
+    def __delitem__(self, key: _KeyType) -> None:
+        with self.lock: value = self._dict.pop(key)
+        if self.disposer: self.disposer(value)
+    def __iter__(self) -> None:
+        raise NotImplementationError("Unlikely to be thread safe")
+    def __len__(self) -> int:
+        with self.lock: return len(self._dict)
+    def keys(self) -> set[_KeyType]:
+        with self.lock: return set(self._dict.keys())
+    def clear(self) -> None:
+        with self.lock:
+            values = list(self._dict.values())
+            self._dict.clear()
+        if self.disposer:
+            for value in values:
+                self.disposer(value)
