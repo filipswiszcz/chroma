@@ -1,3 +1,4 @@
+from enum import Enum, auto
 from typing import Any
 from threading import Lock
 from ssl import create_default_context, SSLError
@@ -8,12 +9,15 @@ from helpers import DEBUG, HTTP_TIMEOUT, HTTP_RETRIES, HTTP_REDIRECTS
 
 # *************** Connection ***************
 
+class RequestMethod(Enum):
+    CONNECT = auto(); GET = auto(); HEAD = auto(); POST = auto(); PUT = auto()
+
 class _Connection: # improve it a lot, because its slow
     def __init__(self, host: str, port: int, timeout: int, ssl: bool = False, redirect: bool = False) -> None:
         self.host, self.port, self._lock, self._socket, self.timeout, self._ssl, self._redirect = host, port, Lock(), None, timeout, create_default_context() if ssl else None, redirect
     def __str__(self) -> str: return f"{type(self).__name__}(host={self.host}, port={self.port}, ssl={self._ssl is not None})"
     def __enter__(self) -> "_Connection": self.connect(); return self
-    def __exit__(self, type, instance, traceback) -> None: self.close();
+    def __exit__(self, type, instance, traceback) -> None: self.close()
     def connect(self) -> "_Connection":
         with self._lock:
             if self._socket: self.close()
@@ -21,7 +25,7 @@ class _Connection: # improve it a lot, because its slow
             if self._ssl: socket = self._ssl.wrap_socket(socket, server_hostname=self.host)
             self._socket = socket
             return socket
-    def close(self) -> None:
+    def close(self) -> None: # closing tcp sockets is a different level
         with self._lock:
             if self._socket:
                 try:
@@ -29,6 +33,8 @@ class _Connection: # improve it a lot, because its slow
                     self._socket.close()
                 except: pass
                 finally: self._socket = None
+    # send() needs to be responsible only for sending and receiving
+    # def send_f(self, path: str, headers: dict = None, body: str = None)
     def send(self, path: str, headers: dict = None, method: str ="GET", max_redirects: int | None = HTTP_REDIRECTS) -> str: # shiiiiiit
         if not self._socket: self.connect()
         headers = headers or {}
@@ -119,7 +125,22 @@ class _HTTPConnectionPool(__ConnectionPool):
         self.connections_size += 1
         if DEBUG > 0: print(f"Starting new HTTP connection [{self.connections_size}]: {self.host}:{self.port or "80"}")
 
-# _HTTPSConnectionPool
+class _HTTPSConnectionPool(__ConnectionPool):
+    def __init__(self, host: str, port: int = None, timeout: int | None = HTTP_TIMEOUT, retries: int | None = HTTP_RETRIES, maxsize: int = 1) -> None:
+        __ConnectionPool.__init__(self, host, port)
+        self.timeout, self.retries = timeout, retries
+        self._connections: LifoQueue[Any] | None = self.CONN_QUEUE(maxsize)
+        self.connections_size, self.requests_size = 0, 0
+        for _ in range(maxsize): self._connections.put(None)
+
+class Poolator:
+    def __init__(self) -> None:
+        self.pools = {} # host: pool
+    def __str__(self) -> str: return f"{type(self).__name__}(pools={len(self.pools)})"
+    def __enter__(self) -> "Poolator": return self
+    def make_new_pool(self, host: str, port: int) -> _HTTPConnectionPool:
+        if host not in self.pools: self.pools["host"] = _HTTPConnectionPool(host, port)
+    def request(self, method: RequestMethod, url: str, headers: dict = None, body: str | bytes = None, fields: Any = None) -> "Response": pass
 
 
 # CONN POOL
